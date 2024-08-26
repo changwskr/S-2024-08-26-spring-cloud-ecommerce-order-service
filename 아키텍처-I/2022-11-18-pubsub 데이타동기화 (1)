@@ -1,0 +1,24 @@
+1.-------
+   USER-SERVICE에서 ORDER-SERVICE로 주문을 하면 주문내역을 카프카에 PUB하고
+   CATALOG-SERVICE는 카프카에서 SUB하여 주문내역을 확인한다.
+2.-------
+   아키텍처
+   1) POM.XML에 KAFA 의존성 처리
+   		<dependency>
+			<groupId>org.springframework.kafka</groupId>
+			<artifactId>spring-kafka</artifactId>
+		</dependency>
+   
+   2) catalog 서비스 수정 - 카프카 consumer 역할
+       KafkaConsumerConfig 환경구성해서 컨슈머로의 역할을 준비고하고 
+       ConcurrentKafkaListenerContainerFactory 카프카 이벤트를 받을 리스너를 준비한다.
+       이 리스너는 토픽에 변경이 발생하면 발동된다.
+       
+   3)  KafkaConsumer는 실제 데이타베이스 변경작업을 실시한다.
+
+3. -------
+   아키텍처
+   4) Order-Service 수정
+        Order 서비스는 카프카의 생산자로의 역할을 수행한다.   
+         KafkaTemplate<String, String> kafkaTemplate() 는 카프카에게 데이타를 보내기위한 템플릿이다.
+       

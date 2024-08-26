@@ -1,0 +1,62 @@
+
+
+
+■ 시나리오
+	kafka-sink-connector를 활용하여
+	주문이 발생한 내역을 다른 데이타베이스에 저장하는 역할 만들어보자
+	
+	주문 생산량 조정 topic은 그대로 활용한다.
+
+■ 아키텍처
+	- order-service
+		- KafkaProducerConfig.java
+		- KafkaProducer.java
+			- send()
+			   상품 주문 수량 조정을 요청한다. -> kafka
+	- catalog-service
+		- KafkaConsumerConfig.java
+		- KafkaConsumer.java
+			@KafkaListener(topics = "example-catalog-topic") 리스너 대기
+			kafka -> 주문한 수량을 갱신한다.
+	- controller
+		ordercontroller.java
+		주문이후 kafaka의 producer를 요청한다. foo_t2 = true; // kafka-sink
+		kafkaProducer.send("example-catalog-topic", orderDto);
+		orderProducer.send("my_sink_orders", orderDto);
+	- sink-connector로 송신하기 위한 작업
+		OrderProducer.java
+			- sinkconnector로 전송하기 위한 작업을 담당하는 곳이다.
+				전송시 payload로 붙이는 곳을 작업한다.
+		우리는 토픽을 my_sink_orders으로 정해놓고 이벤를 발생하면
+		my-order-sink-connector가 이를 감지하여 데이타베이스 저장하는 작업을 한다.
+	- KafkaOrderDto
+		우리는 DB의 변경정보를 전달하기 위한 객체를 생성한다. 
+		이정보에는 Field Payload Schema 정보가 포함되어야 된다.
+		
+ 
+■ kafka 준비사항
+	- topic 준비
+		. example-catalog-topic
+		. my_sink_orders
+	- sink connector 준비
+		kafka-sink-connector를 생성한다.
+		sink 데이타베이스는 원천과 다른 kfkadb로한다.
+		
+		(post) http://localhost:8083/connectors
+		{
+			"name":"my-order-sink-connect",
+			"config":{
+				"connector.class":"io.confluent.connect.jdbc.JdbcSinkConnector",
+				"connection.url":"jdbc:mysql://localhost:3306/kafka_syncdb?serverTimezone=Asia/Seoul&serverTimezone=UTC",	
+				"connection.user":"kafka",
+				"connection.password":"kafka1234",
+				"auto.create":"true",
+				"auto.evolve":"true",
+				"delete.enabled":"false",
+				"tasks.max":"1",
+				"topics":"my_sink_orders"
+			}
+		}
+
+		
+	

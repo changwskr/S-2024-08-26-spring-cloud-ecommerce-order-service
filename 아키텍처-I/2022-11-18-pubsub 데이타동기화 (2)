@@ -1,0 +1,66 @@
+
+
+>> 목표 :
+     order-service 이벤트가 발생하면
+     이 이벤트를 pub해서 orders 테이블을 sink-connector를 이용하여 topic-orders 테이블로 이동 시킨다.
+     
+     데이타베이스(blog)orders --> 데이타베이스(kfkadb) topic_orders
+     
+       /*
+         * 2번 스타일 
+         * 여기서 example-order-topic 을  pub하면 sink-connector에서 sub하는 방식이다.
+         * 여기서는 데이타베이스의 내용을 전달하는 방식이다.
+         * 그럼 변경 내용을 여기서 변경하여 내용을 전달한다. 그래서 UUID 부분과 물량을 여기서 조정하여
+         * 순수하게 데이타만으로 처리하는 방식을 말한다.
+         */
+     
+     
+>> 아키텍처
+1. order-service- controller 수정
+        /*
+         * 2번 스타일 
+         * 여기서 example-order-topic 을  pub하면 sink-connector에서 sub하는 방식이다.
+         */
+        kafkaProducer.send("example-catalog-topic", orderDto);
+        orderProducer.send("my_sink_orders", orderDto);
+        
+2. kafka-sink-connector를 생성한다.
+sink 데이타베이스는 원천과 다른 kfkadb로한다.
+
+(post) http://localhost:8083/connectors
+{
+	"name":"my-order-sink-connect",
+	"config":{
+		"connector.class":"io.confluent.connect.jdbc.JdbcSinkConnector",
+		"connection.url":"jdbc:mysql://127.0.0.1:3306/kfkadb?serverTimezone=Asia/Seoul",	
+		"connection.user":"kafka",
+		"connection.password":"kafka1234",
+		"auto.create":"true",
+		"auto.evolve":"true",
+		"delete.enabled":"false",
+		"tasks.max":"1",
+		"topics":"my_sink_orders"
+	}
+}
+
+3. OrderProducer 를 작성한다.
+   Playload와 schema를 작성한다.
+
+
+
+
+>> 테스트 절차
+   
+1. 강제 주문을 낸다.
+(post) http://127.0.0.1:8000/order-service/58637473-1c45-463e-8378-f9eb09cb279c/orders
+{
+	"productId": "CATALOG-0001",
+	"qty": 10,
+	"unitPrice": 2000
+}
+
+2. sink-connector 데이타 전송
+3. 수량을 확인한다. 
+(get)http://127.0.0.1:8000/catalog-service/catalogs
+        
+     

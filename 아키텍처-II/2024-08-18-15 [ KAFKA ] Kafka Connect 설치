@@ -1,0 +1,40 @@
+#-----------------------------------------------------------------------------------------------------------------------
+[kafka Connect] GET 다음 사이트에서 공수한다.
+    curl -O http://packages.confluent.io/archive/5.5/confluent-community-5.5.2-2.12.tar.gz
+    curl -O http://packages.confluent.io/archive/6.1/confluent-community-6.1.0.tar.gz
+    tar xvf confluent-community-6.1.0.tar.gz
+    cd  $KAFKA_CONNECT_HOME
+#-----------------------------------------------------------------------------------------------------------------------
+[Kafka Connect] 설치위치는 다음과 같다.
+    C:\Work\confluent-6.1.0
+#-----------------------------------------------------------------------------------------------------------------------
+[Kafka Connect] 실행방법은 다음과 같다.
+    C:\Work\confluent-6.1.0
+    .\bin\windows\connect-distributed .\etc\kafka\connect-distributed.properties
+    실행시 에러가 난다.
+#-----------------------------------------------------------------------------------------------------------------------
+[JDBC Connector 설치] 다음 사이트에서 공수한다
+    - https://www.confluent.io/hub/confluentinc/kafka-connect-jdbc
+    - confluentinc-kafka-connect-jdbc-10.7.3.zip
+    #-----------------------------------------------------------------------------------------------------------------------
+    confluentinc-kafka-connect-jdbc-10.7.3.zip 압축을 해제하고
+    #-----------------------------------------------------------------------------------------------------------------------
+    [kafka connector에 jdbc connector 위치 추가]
+        대상파일 C:\Work\confluent-6.1.0\etc\kafka\connect-distributed.properties
+            cd C:\Work\confluent-6.1.0\etc\kafka 이동한다
+                connect-distributed.properties 파일을 연다
+                    파일 마지막에 아래 plugin 정보 추가한다.
+                        - plugin.path=[confluentinc-kafka-connect-jdbc-10.7.3 폴더]
+                            plugin.path=\C:\\Work\\confluentinc-kafka-connect-jdbc-10.7.6\\lib
+#-----------------------------------------------------------------------------------------------------------------------
+[kafka mariadb connector client 설치]
+    - 원본위치 : C:\Users\chang\.m2\repository\org\mariadb\jdbc\mariadb-java-client\2.7.2\mariadb-java-client-2.7.2.jar
+    - 대상 디렉토리 C:\Work\confluent-6.1.0\share\java\kafka
+        - cd C:\Work\confluent-6.1.0\share\java\kafka 이동한다
+            JdbcSourceConnector에서 MariaDB 사용하기 위해 mariadb client 드라이버를 복사한다.
+                mariadb-java-client-2.7.2.jar  파일 복사
+
+    - 대상 디렉토리 C:\Work\confluentinc-kafka-connect-jdbc-10.7.6\lib
+            여기에도 일단 mariadb-java-client-2.7.2.jar  파일 복사 했음
+
+

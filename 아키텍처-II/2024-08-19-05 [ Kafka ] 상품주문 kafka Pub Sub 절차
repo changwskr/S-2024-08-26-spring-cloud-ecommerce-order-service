@@ -1,0 +1,55 @@
+
+user가 주문한다.
+        http://127.0.0.1:8000/order-service/(user-id)/orders
+        상품id, 수량, 단가
+
+        http://127.0.0.1:8000/order-service/e8d473bd-e590-4a79-91dc-1dd7a71f7265/orders
+        {
+        	"productId": "CATALOG-0005",
+        	"qty": 31,
+        	"unitPrice": 2000
+        }
+#----------------------------------------------------------------------------------------------------------------------
+[order-service]
+    □ OrderController.createOrder
+      - 주문을 수신한다.
+
+     KafkaProducer는 주문이 들어오면
+	 (POST) http://127.0.0.1:8000/order-service/(user-id)/orders
+     @PostMapping("/{userId}/orders")
+     public ResponseEntity<ResponseOrder> createOrder(@PathVariable("userId") String userId, @RequestBody RequestOrder orderDetails)
+     {
+        주문한다.
+        OrderDto createdOrder = orderService.createOrder2(orderDto);
+
+        주문이 성공하면 example-catalog-topic에 메시지를 publisher 한다.
+
+        □□□□□□□□□□□ example-catalog-topic publisher □□□□□□□□□□□
+        KafkaProducer kafkaProducer; 상품id, 수량, 단가 *
+        kafkaProducer.send("example-catalog-topic", orderDto);
+        □□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□
+    }
+#----------------------------------------------------------------------------------------------------------------------
+[catalog-service]
+    □ KafkaConsumer.updateQty()
+
+      public class KafkaConsumer {
+
+	     // 여기서 생산자에서 생산한 카탈로그에 대한 갯수를 수정해야 되어서 repository를 선언한다.
+         ICatalogRepositoryDAO repository;
+
+         □□□□□□□□□□□□□□□□□ example-catalog-topic subscribe □□□□□□□□□□□□□□□
+         ★★★★★ 여기서 리스너로 example-catalog-topic 수신대기하고 있다. 상품id, 수량, 단가
+         @KafkaListener(topics = "example-catalog-topic")
+
+         public void updateQty(String kafkaMessage) throws Exception {
+             상품id, 수량, 단가
+             CatalogEntity entity = repository.findByProductId((String)map.get("productId"));
+             주문된 수량을 원 catalog 테이블에 있는 수량에서 차감하고 저장한다.
+             entity.setStock(entity.getStock() - (Integer)map.get("qty"));
+             repository.save(entity);
+         }
+         □□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□
+      }
+
+#----------------------------------------------------------------------------------------------------------------------

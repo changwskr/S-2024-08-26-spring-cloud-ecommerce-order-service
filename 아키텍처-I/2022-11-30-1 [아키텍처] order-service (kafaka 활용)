@@ -1,0 +1,36 @@
+● 아키텍처
+	- order-service
+		- KafkaProducerConfig.java
+		- KafkaProducer.java
+			- send()
+			   상품 주문 수량 조정을 요청한다. -> kafka
+	- catalog-service
+		- KafkaConsumerConfig.java
+		- KafkaConsumer.java
+			@KafkaListener(topics = "example-order-topic") 리스너 대기
+			kafka -> 주문한 수량을 갱신한다.
+	- controller
+		ordercontroller.java
+		주문이후 kafaka의 producer를 요청한다. foo_t1 = true; // kafka
+		kafkaProducer.send("example-order-topic", orderDto);
+
+● 개인주문을 한다.
+(post) http://127.0.0.1:8000/order-service/58637473-1c45-463e-8378-f9eb09cb279c/orders
+{
+	"productId": "CATALOG-001",
+	"qty": 10,
+	"unitPrice": 2000
+}
+
+● controller - createOrder
+
+● service - orderService.createOrder(orderDto);
+
+● event sourcing
+(controller)
+	- 카프카 Pub : 
+		kafkaProducer.send("example-order-topic", orderDto);
+			- catalog-service가 Sub 대기
+
+
+

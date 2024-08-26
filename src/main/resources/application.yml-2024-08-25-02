@@ -1,0 +1,76 @@
+server:
+  port: 0
+spring:
+  application:
+    name: order-service
+  mvc:
+    pathmatch:
+      matching-strategy: ant-path-matcher
+  zipkin:
+    base-url: http://localhost:9411
+    enabled: true
+  sleuth:
+    sampler:
+      probability: 1.0
+
+  h2:
+    console:
+      enabled: true
+      settings:
+        web-allow-others: true
+      path: /h2-console
+
+#=======================================================================================================================
+#  h2  (08-19-05)
+#  datasource:
+#    url: jdbc:h2:mem:h6db
+#    driver-class-name: org.h2.Driver
+#----------------------------------------------------------------------------------------------------------------------
+#  mariadb (08-19-06)
+  datasource:
+    driver-class-name: org.mariadb.jdbc.Driver
+    # 1 test 08-20 (성공) - 설치가이드에는 이렇게 명시해서 이것으로 진행
+    url: jdbc:mysql://localhost:3306/mydb
+    # 2 test 08-20 (성공)
+    # url: jdbc:mariadb://localhost:3306/mydb
+    # 3 docker 환경 적용 --> 이정보는 외부로부터 입력받는다. docker run -e 로 명시한다. my-mariadb은 컨테이너명이다.
+    # url: jdbc:mariadb://my-mariadb:3306/mydb
+    username: root
+    password: test1357
+#=======================================================================================================================
+  jpa:
+    open-in-view: true
+    hibernate:
+      ddl-auto: update
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+      use-new-id-generator-mappings: false
+    show-sql: true
+    generate-ddl: true
+    properties:
+      hibernate.format_sql: true
+    database-platform=org:
+      hibernate:
+        dialect:
+          MySQLDialect:
+
+
+eureka:
+  instance:
+    hostname: localhost
+    instance-id: ${spring.cloud.client.hostname}:${spring.application.name}:${spring.application.instance_id:${random.value}}
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    service-url:
+      defaultZone: http://127.0.0.1:8761/eureka
+logging:
+  level:
+    com.example.orderservice: DEBUG
+greeting:
+  message: Welcome to the Simple E-commerce-order.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: refresh, health, beans, busrefresh, info, metrics, prometheus               

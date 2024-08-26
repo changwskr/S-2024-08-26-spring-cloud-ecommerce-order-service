@@ -1,0 +1,21 @@
+#-----------------------------------------------------------------------------------------------------------------------
+[실행] connector 기동
+#-----------------------------------------------------------------------------------------------------------------------
+[topic 조회]
+    .\bin\windows\kafka-topics.bat --bootstrap-server localhost:9092 --list
+        __consumer_offsets
+        connect-configs  ------------
+        connect-offsets  ------------
+        connect-status   ------------
+        example-catalog-topic
+        example-order-topic
+        quickstart-events
+        r-quickstart-events
+
+        3개의 connector 가 추가된것을 확인해본다.
+
+
+
+
+
+

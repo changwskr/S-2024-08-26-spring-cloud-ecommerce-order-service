@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-orderservice-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: my-orderservice
+  template:
+    metadata:
+      labels:
+        app: my-orderservice
+    spec:
+      containers:
+        - name: my-orderservice
+          image: changwskr/my-orderservice:1.0
+          ports:
+            - containerPort: 8080

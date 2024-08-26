@@ -1,0 +1,238 @@
+
+[maridb]
+    □ mysql -uroot -p
+        - show databases;
+        - create database mydb; 데이타베이스 생성
+        - use mydb;
+        - show tables;
+    □ 테이블
+        drop table orders;
+        create table orders (
+                    id int auto_increment primary key,
+                    productId varchar(20) not null,
+                    qty int default 0,
+                    unitPrice int default 0,
+                    totalPrice int default 0,
+                    userId varchar(50) not null,
+                    orderId varchar(50) not null,
+                    createdAt datetime default NOW()
+        );
+#----------------------------------------------------------------------------------------------------------------------
+
+[kafka]
+    ■ topic 준비
+		. example-catalog-topic
+		. orders
+	■ sink connector 준비
+		. kafka-sink-connector를 생성한다.
+		. sink 데이타베이스는 원천과 다른 kfkadb로한다.
+
+		(post) http://localhost:8083/connectors
+		{
+			"name":"my-order-sink-connect",
+			"config":{
+				"connector.class":"io.confluent.connect.jdbc.JdbcSinkConnector",
+				"connection.url":"jdbc:mysql://localhost:3306/mydb?serverTimezone=Asia/Seoul&serverTimezone=UTC",
+				"connection.user":"root",
+				"connection.password":"test1357",
+				"auto.create":"true",
+				"auto.evolve":"true",
+				"delete.enabled":"false",
+				"tasks.max":"1",
+				"topics":"orders"
+			}
+		}
+#----------------------------------------------------------------------------------------------------------------------
+□ 사용자가 상품을 주문한다.
+        http://127.0.0.1:8000/order-service/(user-id)/orders
+        상품id, 수량, 단가
+
+        http://127.0.0.1:8000/order-service/e8d473bd-e590-4a79-91dc-1dd7a71f7265/orders  5번이상 서비스 한다.
+        {
+        	"productId": "CATALOG-0005", (이때 상품아이디로 계속 테스트를 위해 교체한다)
+        	"qty": 31,
+        	"unitPrice": 2000
+        }
+#----------------------------------------------------------------------------------------------------------------------
+사용자 주문 - OrderService.OrderController.createOrder
+                                            - orderService.createOrder2();
+                                            - orderProducer.send("my_sink_orders", orderDto);
+                                            - return ResponseEntity.status(HttpStatus.CREATED).body(responseOrder);
+
+[order-service]
+    □ 데이타베이스를 기존 h2에서 mariadb로 변경한다.
+    □ application.yaml
+          datasource:
+            driver-class-name: org.mariadb.jdbc.Driver
+            url: jdbc:mariadb://localhost:3306/mydb
+            username: root
+            password: test1357
+
+
+    □ 프로그램 OrderController
+        public class OrderController {
+        	Environment env;
+        	OrderServiceAS orderService;
+        	KafkaProducer kafkaProducer;
+        	OrderProducer orderProducer;
+
+            ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+            ■ 사용자 주문 정보 수신
+            ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+        	// (POST) http://127.0.0.1:8000/order-service/(user-id)/orders
+        	@PostMapping("/{userId}/orders")
+        	public ResponseEntity<ResponseOrder> createOrder(@PathVariable("userId") String userId,
+        			@RequestBody RequestOrder orderDetails) {
+
+        		OrderDto orderDto = mapper.map(orderDetails, OrderDto.class);
+        		orderDto.setUserId(userId);
+
+                ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■ start
+                ■■■■■■■■■ 서비스를 호출하여 주문을 만든다.
+        		OrderDto createdOrder = orderService.createOrder2(orderDto);
+        		ResponseOrder responseOrder = mapper.map(createdOrder, ResponseOrder.class);
+
+                ■■■■■■■■■ kafka로 메시지를 생산한다.
+                ■■■ 토픽은 orders를 만들고 my-order-sink-connect는 이 토픽을 리슨하고 있다.
+                //--------------------------------------------------------------------------------------------------------------
+                // 2번 스타일 여기서 example-order-topic을 pub하면 sink-connector에서 sub하는 방식이다.
+                // 데이타베이스의 내용을 전달하는 방식이다. 그럼 변경 내용을 여기서 변경하여 내용을 전달한다. 그래서 UUID 부분과 물량을 여기서 조정하여
+                // 순수하게 데이타만으로 처리하는 방식을 말한다.
+                //--------------------------------------------------------------------------------------------------------------
+                // 이 로직이 필요한 이유는 sink connector를 통해서 타 db에 저장목적일때 데이타를 채워주는 역할이다.
+                // UUID 는 변경할 수 없으므로 여기서 다시 바꾸는 역할을 한다.
+                // 여기서 UUID 을 셋팅해서 데이타를 직접 가공해서 Producer 한다.
+                orderDto.setOrderId(UUID.randomUUID().toString());
+                orderDto.setTotalPrice(orderDetails.getQty() * orderDetails.getUnitPrice());
+
+                // sink connector를 통해서 가정은 현재 catalog-service의 데이타를 다른 데이타 베이스의 주문목록에 저장하는 것이
+                // 목적이다.
+                // 그래서 여기서는 uuid와 orderid, totalprice를 여기서 계산하는 것이다.
+                ■■■ 카프카로 토픽메시지를 전송한다.
+                orderProducer.send("orders", orderDto);
+                ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■ end
+
+        		log.info("After added orders data");
+        		log.info("★★★ After retrieve orders microservice-createOrder");
+
+        		■■■ 클라이언트로 주문한 내용을 알려준다.
+        		return ResponseEntity.status(HttpStatus.CREATED).body(responseOrder);
+
+        	}
+
+
+    □ 프로그램 OrderProducer
+
+        public class OrderProducer {
+            ■■■ 템플릿 정의
+            private KafkaTemplate<String, String> kafkaTemplate;
+
+            ■■■ 보내야 될 데이타 양식 정의
+            List<Field> fields = Arrays.asList(new Field("string", true, "orderId"),
+                    new Field("string", true, "userId"),
+                    new Field("string", true, "productId"),
+                    new Field("int32", true, "qty"),
+                    new Field("int32", true, "unitPrice"),
+                    new Field("int32", true, "totalPrice"));
+            ■■■ 데이타 구조 정의 (토픽에 맞게)
+            Schema schema = Schema.builder()
+                    .type("struct")
+                    .fields(fields)
+                    .optional(false)
+                    .name("my_sink_orders")
+                    .build();
+
+            ■■■ 빈으로 인젝션 받는다.
+            public OrderProducer(KafkaTemplate<String, String> kafkaTemplate) {
+                this.kafkaTemplate = kafkaTemplate;
+            }
+
+            ■■■ 실제 토픽을 생산하는 작업을 한다.
+            public OrderDto send(String topic, OrderDto orderDto) {
+                Payload payload = Payload.builder()
+                        .orderId(orderDto.getOrderId())
+                        .userId(orderDto.getUserId())
+                        .productId(orderDto.getProductId())
+                        .qty(orderDto.getQty())
+                        .unitPrice(orderDto.getUnitPrice())
+                        .totalPrice(orderDto.getTotalPrice())
+                        .build();
+
+                ■■■ KafkaOrderDto 로 변환해서 보내야 된다.
+                KafkaOrderDto kafkaOrderDto = new KafkaOrderDto(schema, payload);
+
+                ObjectMapper mapper = new ObjectMapper();
+                String jsonInString = "";
+                try {
+                    jsonInString = mapper.writeValueAsString(kafkaOrderDto);
+                } catch(JsonProcessingException ex) {
+                    ex.printStackTrace();
+                }
+
+                log.info(">topic>"+ topic + "\n>>>>>>jsonInString>: " + jsonInString);
+                ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+                ■■■ 여기서 토픽으로 전송한다.
+                kafkaTemplate.send(topic, jsonInString);
+                log.info("Order Producer sent data from the Order microservice: " + kafkaOrderDto);
+                ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+
+                return orderDto;
+            }
+        }
+
+
+
+#----------------------------------------------------------------------------------------------------------------------
+[kafka]
+    □ 카프카는 OrderController.createOrder()에서
+        - orderProducer.send("my_sink_orders", orderDto) 요청을 대기하고 있다.
+
+    □ 이벤트가 발생하면
+        - "my-order-sink-connect"는 데이타베이스에
+            - my_sink_orders 테이블을 만들고 관련 데이타를 insert/update 한다.
+
+#----------------------------------------------------------------------------------------------------------------------
+[테스트]
+    □ kafka - orders 소비자 하나 기동
+        cd C:\Work\kafka_2.12-3.7.1
+        .\bin\windows\kafka-console-consumer.bat --bootstrap-server localhost:9092 --topic orders --from-beginning
+        (누군가 주문하기를 대기)
+
+    □ 상품하나 주문
+        http://127.0.0.1:8000/order-service/c25cd2bb-5a6f-431e-9f8a-bf9fba05278d/orders
+        {
+        	"productId": "CATALOG-0001",
+        	"qty": 1,
+        	"unitPrice": 1500
+        }
+
+    □ kafka - orders 소비자 하나 기동
+            .\bin\windows\kafka-console-consumer.bat --bootstrap-server localhost:9092 --topic orders --from-beginning
+                {"schema":{"type":"struct","fields":[{"type":"string","optional":true,"field":"orderId"},
+                                    {"type":"string","optional":true,"field":"userId"},
+                                    {"type":"string","optional":true,"field":"productId"},
+                                    {"type":"int32","optional":true,"field":"qty"},
+                                    {"type":"int32","optional":true,"field":"unitPrice"},
+                                    {"type":"int32","optional":true,"field":"totalPrice"}],
+                                    "optional":false,"name":"orders"},
+                 "payload":{"orderId":"80b1151c-fc4c-410d-ae7a-7db3fc8b4172",
+                            "userId":"c25cd2bb-5a6f-431e-9f8a-bf9fba05278d",
+                            "productId":"CATALOG-0001",
+                            "qty":1,"unitPrice":1500,
+                            "totalPrice":1500}
+                }
+
+    □ Orderservice.OrderController.createOrder()는 두개의 topic 을생산다.
+        KafkaProducer.send("example-catalog-topic", orderDto);
+    	OrderProducer.send("orders", orderDto);
+
+    □ Catalogservice.KafkaConsumer 두개의 topic에 관심이 있다.
+        KafkaConsumer.updateQty() -> @KafkaListener(topics = "example-catalog-topic")
+        or
+        KafkaConsumer.processMessage() -> @KafkaListener(topics="example-order-topic")
+        두개중 하나만 반응한다.
+
+    □ kafka.my-order-sink-connect 는 topic orders에 관심이 있다.
+
+
+

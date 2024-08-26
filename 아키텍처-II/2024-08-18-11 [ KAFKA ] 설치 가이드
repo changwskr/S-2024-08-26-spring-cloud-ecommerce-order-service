@@ -1,0 +1,23 @@
+
+
+#-----------------------------------------------------------------------------------------------------------------------
+[설치]
+    □ 설치 디렉토리 패스가 긴경우 실행이 안된다.
+        - C:\Work\kafka_2.12-3.7.1
+#-----------------------------------------------------------------------------------------------------------------------
+    □ 실행 커맨드
+        - bin
+            01.start
+                주키퍼와 카프카를 기동한다.
+            02.topic
+                topic 만들기 kafka-topic-create.bat
+                topic 확인   kafka-topic-des.bat
+                topic 리스트 확인  kafka-topic-list.bat
+        - helllo world test
+            (터미널을 따로 기동하여 메시지를 입력해 본다)
+            .\bin\windows\kafka-console-consumer.bat --bootstrap-server localhost:9092 --topic quickstart-events
+            .\bin\windows\kafka-console-producer.bat --broker-list localhost:9092 --topic quickstart-events
+            메시지를 생산하는 것이 생산자 이 메시지지에 관심이 있는자가 소비자이다.
+            여기서 관심있는 토픽은 quickstart-events 이다.
+        -
+

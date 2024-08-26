@@ -1,0 +1,30 @@
+/* 
+ * 
+ * pom.xml 디펜던시 추가
+ * -----------------------------------------------------------------
+		<!-- 2022-10-23 오후 4:47 삽입 -->
+	    <dependency>
+	      <groupId>io.springfox</groupId>
+	      <artifactId>springfox-swagger-ui</artifactId>
+	      <version>2.9.2</version>
+	    </dependency>
+
+	    <dependency>
+	      <groupId>io.springfox</groupId>
+	      <artifactId>springfox-swagger2</artifactId>
+	      <version>2.9.2</version>
+	    </dependency>
+	    
+	    
+	    
+ * -----------------------------------------------------------------
+ * application.yml 다음의 내용 추가
+ * -----------------------------------------------------------------
+    # swaagger 설정 변경
+    # http://localhost:####/swagger-ui.html
+    pathmatch:
+      matching-strategy: ant-path-matcher
+ */
+ 
+ >>> 3.
+ SwaggerConfiguration.java 적용

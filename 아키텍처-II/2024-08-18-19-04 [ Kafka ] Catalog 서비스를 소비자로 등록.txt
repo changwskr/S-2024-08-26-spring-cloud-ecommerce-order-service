@@ -1,0 +1,181 @@
+
+#-----------------------------------------------------------------------------------------------------------------------
+[시나리오]
+    □ 사용자 --------(사용자조회) ------ □ User-Service
+
+    □ 사용자 --------(상품조회)-------- □ Catalog-Service
+
+    □ 사용자 --------(상품주문)-------- □ Order-Service -------(상품수량업데이트)-------□ Catalog-Service
+                                        ★ OrderService에서 kafka Topic 메시지 전송 ----- 생성자 Producer ★
+                                        (생성자)
+    □ 사용자 --------(주문확인) ------- □ User-Service  -------(주문조회) -------------□ OrderService
+
+    □ Catalog-Service ★ (소비자)
+      CatalogService는 OrderService에서 생성된 Topic 메시지 취득 ---------------------- 소비자 Consumer ★
+
+#-----------------------------------------------------------------------------------------------------------------------
+[아키텍처]
+	□ kafka-sink-connector를 활용해 	주문이 발생한 내역을 다른 데이타베이스에 저장하는 역할 만들어보자
+	  주문 생산량 조정 topic은 그대로 활용한다.
+#-----------------------------------------------------------------------------------------------------------------------
+[order-service]
+    □ pom.xml
+            <dependency>
+                <groupId>org.springframework.kafka</groupId>
+                <artifactId>spring-kafka</artifactId>
+            </dependency>
+    □ 프로그램- KafkaConsumerCondfig 등록 (catalogservice는 소비자로서 역할을 한다)
+        - 소비자 역할을 하도록 지정하고ConsumerFactory
+        - 토픽의 이벤트에 대한 리스너를 등록한다. ConcurrentKafkaListenerContainerFactory
+        @EnableKafka
+        @Configuration
+        public class KafkaConsumerConfig {
+            @Bean // 소비자 정보를 빈으로 등록
+            public ConsumerFactory<String, String> consumerFactory() {
+                Map<String, Object> properties = new HashMap<>();
+                properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "127.0.0.1:9092");
+                properties.put(ConsumerConfig.GROUP_ID_CONFIG, "consumerGroupId");
+                properties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+                properties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+                return new DefaultKafkaConsumerFactory<>(properties);
+            }
+            @Bean  // 토픽에 어떤 이벤트가 발생했는지 조사한다.
+            public ConcurrentKafkaListenerContainerFactory<String, String> kafkaListenerContainerFactory() {
+                ConcurrentKafkaListenerContainerFactory<String, String> kafkaListenerContainerFactory
+                        = new ConcurrentKafkaListenerContainerFactory<>();
+                kafkaListenerContainerFactory.setConsumerFactory(consumerFactory());
+                return kafkaListenerContainerFactory;
+            }
+        }
+
+
+    □ 프로그램- KafkaConsumer
+        - @KafkaListener(topics="example-order-topic") 에서 발생하는 이벤트를 소비한다.
+
+        @Service
+        @Slf4j
+        public class KafkaConsumer {
+            // 여기서 생산자에서 생산한 카탈로그에 대한 갯수를 수정해야 되어서 repository를 선언한다.
+            ICatalogRepositoryDAO repository;
+
+            @Autowired
+            public KafkaConsumer(ICatalogRepositoryDAO repository) {
+                this.repository = repository;
+            }
+
+            // 생산자에서 생산한 이벤트 대기한다.
+            @KafkaListener(topics = "example-catalog-topic")
+            public void updateQty(String kafkaMessage) throws Exception {
+                log.info("★★★ KafkaConsumer.updateQty -->example-catalog-topic>" + kafkaMessage);
+
+                Map<Object, Object> map = new HashMap<>();
+                ObjectMapper mapper = new ObjectMapper();
+
+                try {
+                    // 생산자에서 발생한 메시지는 OrderDTO이다. 이것을 JSON KEY-VALUE값으로 변환한다.
+                    map = mapper.readValue(kafkaMessage, new TypeReference<Map<Object, Object>>() {});
+                } catch (JsonProcessingException ex) {
+                    ex.printStackTrace();
+                }
+
+                // 생산품의 ID를 확인한다.
+                CatalogEntity entity = repository.findByProductId((String)map.get("productId"));
+                if (entity != null) {
+                    // 수량을 감소시킨다.
+                    entity.setStock(entity.getStock() - (Integer)map.get("qty"));
+                    // 데이타베이스에 저장한다.
+                    repository.save(entity);
+                }
+                else {
+                    log.error("CatalogEntity 상품이 존재하지 않습니다.");
+                    throw new Exception("CatalogEntity 상품이 존재하지 않습니다.");
+                }
+            }
+
+            // 리스너이기 때문에 이벤트마다. 발생한다.
+            @KafkaListener(topics="example-order-topic")
+            public void processMessage(String kafkaMessage) throws Exception {
+                log.info("\n----------->example-order-topic>"+kafkaMessage);
+
+                Map<Object, Object> map = new HashMap<>();
+                ObjectMapper mapper = new ObjectMapper();
+                try {
+                    map = mapper.readValue(kafkaMessage, new TypeReference<Map<Object, Object>>() {});
+                } catch (JsonProcessingException ex) {
+                    ex.printStackTrace();
+                }
+
+                // map에는 order서비스에서 발생시킨 데이타가 존재한다.
+                // OrderDto의 내용이 전달되어 온다.
+                //
+                CatalogEntity entity = repository.findByProductId((String)map.get("productId"));
+                if (entity != null) {
+                    entity.setStock(entity.getStock() - (Integer)map.get("qty"));
+                    repository.save(entity);
+                }
+                else {
+                    log.error("CatalogEntity 상품이 존재하지 않습니다.");
+                    throw new Exception("CatalogEntity 상품이 존재하지 않습니다.");
+                }
+
+            }
+        }
+
+
+
+
+
+
+■ 아키텍처
+	- order-service
+		- KafkaProducerConfig.java
+		- KafkaProducer.java
+			- send()
+			   상품 주문 수량 조정을 요청한다. -> kafka
+	- catalog-service
+		- KafkaConsumerConfig.java
+		- KafkaConsumer.java
+			@KafkaListener(topics = "example-catalog-topic") 리스너 대기
+			kafka -> 주문한 수량을 갱신한다.
+	- controller
+		ordercontroller.java
+		주문이후 kafaka의 producer를 요청한다. foo_t2 = true; // kafka-sink
+		kafkaProducer.send("example-catalog-topic", orderDto);
+		orderProducer.send("my_sink_orders", orderDto);
+	- sink-connector로 송신하기 위한 작업
+		OrderProducer.java
+			- sinkconnector로 전송하기 위한 작업을 담당하는 곳이다.
+				전송시 payload로 붙이는 곳을 작업한다.
+		우리는 토픽을 my_sink_orders으로 정해놓고 이벤를 발생하면
+		my-order-sink-connector가 이를 감지하여 데이타베이스 저장하는 작업을 한다.
+	- KafkaOrderDto
+		우리는 DB의 변경정보를 전달하기 위한 객체를 생성한다.
+		이정보에는 Field Payload Schema 정보가 포함되어야 된다.
+
+
+■ kafka 준비사항
+	- topic 준비
+		. example-catalog-topic
+		. my_sink_orders
+	- sink connector 준비
+		kafka-sink-connector를 생성한다.
+		sink 데이타베이스는 원천과 다른 kfkadb로한다.
+
+		(post) http://localhost:8083/connectors
+		{
+			"name":"my-order-sink-connect",
+			"config":{
+				"connector.class":"io.confluent.connect.jdbc.JdbcSinkConnector",
+				"connection.url":"jdbc:mysql://localhost:3306/kafka_syncdb?serverTimezone=Asia/Seoul&serverTimezone=UTC",
+				"connection.user":"kafka",
+				"connection.password":"kafka1234",
+				"auto.create":"true",
+				"auto.evolve":"true",
+				"delete.enabled":"false",
+				"tasks.max":"1",
+				"topics":"my_sink_orders"
+			}
+		}
+
+
+

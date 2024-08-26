@@ -1,0 +1,26 @@
+
+
+● 개인주문을 한다.
+(post) http://127.0.0.1:8000/order-service/58637473-1c45-463e-8378-f9eb09cb279c/orders
+{
+	"productId": "CATALOG-001",
+	"qty": 10,
+	"unitPrice": 2000
+}
+
+● controller - createOrder
+
+● service - orderService.createOrder(orderDto);
+
+● event sourcing
+(controller)
+	- 카프카 Pub : 
+		kafkaProducer.send("example-order-topic", orderDto);
+			- catalog-service가 Sub 대기
+	- 카프카 sink_connector : 다른 데이타베이스에 저장
+		kafkaProducer.send("example-catalog-topic", orderDto);
+		orderProducer.send("my_sink_orders", orderDto);
+
+● service
+
+

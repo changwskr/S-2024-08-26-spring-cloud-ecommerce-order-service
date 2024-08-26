@@ -1,0 +1,78 @@
+#-----------------------------------------------------------------------------------------------------------------------
+https://blog.naver.com/sejonghumble/223363964539
+[mariadb 환경 구성]
+    □ mysql 데이타를 복사한다.
+        C:\Programming(23-08-15)\MariaDB\data -> C:\Programming(23-08-15)\zRepository\r2024-11-17-spring-kafka-runtime\mariadb\mysql
+    □ Dockerfile 준비
+        FROM mariadb
+        ENV MYSQL_ROOT_PASSWORD test1357
+        ENV MYSQL_DATABASE mydb
+        COPY ./mysql /var/lib/mysql
+        EXPOSE 3306
+        #ENTRYPOINT ["mysqld","--user=root"]
+        CMD ["--user=root"]
+
+    □ docker build / run
+        - docker build -t changwskr/my_mariadb .
+        - docker run -d --name maridb --network ecommerce-network \
+                 -p 3306:3306
+    □ 네트워크에 할당여부 확인
+        - docker network inspect
+
+    □ maridb에 접근하여 권한을 만들어 준다 (중요)
+        이것을 하는 이유는 ip로 접근하는 것을 허용해주기 위해서이다.
+        만약 docker-destop을 이용한다면 /bin/bash 라고 치면 bash 쉘로 바로들어간다.
+
+        docker exec -it mariadb bash
+        mariadb -uroot -p
+
+        >show databases;
+        >use mydb;
+        >select * from orders;
+        >grant all privileges on *.* to 'root'@'%' identified by 'test1357'; ■■■■■■■■■
+        >flush privileges;
+        >exit
+        >mariadb -h127.0.0.1 -uroot -p 로 로그인을 다시해본다.
+
+
+    □ 접근
+        http://localhost:13306/#/
+    □ 주의
+        - window mariadb는 잠시중단한다.
+#-----------------------------------------------------------------------------------------------------------------------
+
+
+order-service
+#-----------------------------------------------------------------------------------------------------------------------
+[order-service 환경 구성]
+
+    □ application.yaml
+    □ bootstrap.yaml
+    □ ------------------------------------------------------------------------------------------------------------------
+    □ KafkaProducerConfig.java 환경변경
+        - public class KafkaProducerConfig {
+              @Bean
+              public ProducerFactory<String, String> producerFactory() {
+                  Map<String, Object> properties = new HashMap<>();
+                  // □□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□
+                  // □ 08-35-02 도커 컨테이너 적용으로 인한 변경
+                  // □ docker network inspect ecommerce-network
+                  // □□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□□
+                  boolean DOCKER_DEPLOY_ENV = Boolean.TRUE;
+                  if ( DOCKER_DEPLOY_ENV )
+                      properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "172.18.0.101:9092");
+                  else
+                      properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "127.0.0.1::9092");
+                  properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+                  properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+
+                  return new DefaultKafkaProducerFactory<>(properties);
+              }
+    □ ------------------------------------------------------------------------------------------------------------------
+    □ Dockerfile
+    □ ------------------------------------------------------------------------------------------------------------------
+    □ docker build
+    □ docker push
+    □ docker run
+    □ ------------------------------------------------------------------------------------------------------------------
+

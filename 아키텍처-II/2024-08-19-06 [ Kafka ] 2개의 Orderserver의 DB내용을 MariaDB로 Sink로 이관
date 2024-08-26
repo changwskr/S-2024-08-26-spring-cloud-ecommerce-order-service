@@ -1,0 +1,85 @@
+
+□ 사용자 ---- □ User-Service ------ FeignClient ------- □ Order-Service -1  -------(Sink)
+                                   RestTemplate                                        □ Messaging ------ □ MariaDB
+                                               ------- □ Order-Service -2  --------(Sink)
+ order-serice의 h2 데이타 내용을 maridb로 몰아서 넣는다.
+#----------------------------------------------------------------------------------------------------------------------
+user가 주문한다.
+        http://127.0.0.1:8000/order-service/(user-id)/orders
+        상품id, 수량, 단가
+
+        http://127.0.0.1:8000/order-service/e8d473bd-e590-4a79-91dc-1dd7a71f7265/orders  5번이상 서비스 한다.
+        {
+        	"productId": "CATALOG-0005", (이때 상품아이디로 계속 테스트를 위해 교체한다)
+        	"qty": 31,
+        	"unitPrice": 2000
+        }
+#----------------------------------------------------------------------------------------------------------------------
+[maridb]
+    □ mysql -uroot -p
+        - show databases;
+        - create database mydb; 데이타베이스 생성
+        - use mydb;
+        - show tables;
+    □ 테이블
+        drop table orders;
+        create table orders (
+            id int auto_increment primary key,
+            product_id varchar(20) not null,
+            qty int default 0,
+            unit_price int default 0,
+            total_price int default 0,
+            user_id varchar(50) not null,
+            order_id varchar(50) not null,
+            created_at datetime default NOW()
+        );
+
+
+        drop table orders;
+        create table orders (
+                    id int auto_increment primary key,
+                    productId varchar(20) not null,
+                    qty int default 0,
+                    unitPrice int default 0,
+                    totalPrice int default 0,
+                    userId varchar(50) not null,
+                    orderId varchar(50) not null,
+                    createdAt datetime default NOW()
+        );
+
+     현재 h2 db의 테이블의 컬럼명과 mariadb의 테이블의 컬럼명이 틀리다.
+#----------------------------------------------------------------------------------------------------------------------
+[kafka]
+    ■ topic 준비
+		. example-catalog-topic
+		. my_sink_orders
+	■ sink connector 준비
+		. kafka-sink-connector를 생성한다.
+		. sink 데이타베이스는 원천과 다른 kfkadb로한다.
+
+		(post) http://localhost:8083/connectors
+		{
+			"name":"my-order-sink-connect",
+			"config":{
+				"connector.class":"io.confluent.connect.jdbc.JdbcSinkConnector",
+				"connection.url":"jdbc:mysql://localhost:3306/kafka_syncdb?serverTimezone=Asia/Seoul&serverTimezone=UTC",
+				"connection.user":"kafka",
+				"connection.password":"kafka1234",
+				"auto.create":"true",
+				"auto.evolve":"true",
+				"delete.enabled":"false",
+				"tasks.max":"1",
+				"topics":"my_sink_orders"
+			}
+		}
+#----------------------------------------------------------------------------------------------------------------------
+[order-service]
+    □ 데이타베이스를 기존 h2에서 mariadb로 변경한다.
+    □ application.yaml
+
+        # mariadb (08-19-06)
+          datasource:
+            driver-class-name: com.mysql.cj.jdbc.Driver
+            url: jdbc:mysql://localhost:3306/mydb
+            username: root
+            password: test1357

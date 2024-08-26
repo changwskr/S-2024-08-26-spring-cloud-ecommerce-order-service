@@ -1,0 +1,41 @@
+#-----------------------------------------------------------------------------------------------------------------------
+[오류]
+PS C:\Work\confluent-6.1.0> .\bin\windows\connect-distributed.bat .\etc\kafka\connect-distributed.properties
+Classpath is empty. Please build the project first e.g. by running 'gradlew jarAll'
+#-----------------------------------------------------------------------------------------------------------------------
+[조치]
+    대상파일 : ""C:\Work\confluent-6.1.0\bin\windows\kafka-run-class.bat""
+    조치내용 :
+            -------------------------------------------------------------------------------------------
+            (추가)
+            rem classpath addition for LSB style path
+            if exist %BASE_DIR%\share\java\kafka\ (
+                call :concat "%BASE_DIR%\share\java\kafka\*"
+            )
+            -------------------------------------------------------------------------------------------
+            rem Classpath addition for core
+            for %%i in ("%BASE_DIR%\core\build\libs\kafka_%SCALA_BINARY_VERSION%*.jar") do (
+            	call :concat "%%i"
+            )
+
+
+
+#-----------------------------------------------------------------------------------------------------------------------
+[오류]
+PS C:\Work\confluent-6.1.0> .\bin\windows\connect-distributed.bat .\etc\kafka\connect-distributed.properties
+"C:\Work\confluent-6.1.0\bin\windows\kafka-run-class.bat" org.apache.kafka.connect.cli.ConnectDistributed .\etc\kafka\connect-distributed.properties
+log4j:ERROR Could not read configuration file from URL [file:C:/Work/confluent-6.1.0/config/tools-log4j.properties].
+java.io.FileNotFoundException: C:\Work\confluent-6.1.0\config\tools-log4j.properties (지정된 경로를 찾을 수 없습니다)#-----------------------------------------------------------------------------------------------------------------------
+#-----------------------------------------------------------------------------------------------------------------------
+[조치]
+    대상파일 : C:\Work\confluent-6.1.0\bin\windows\connect-distributed.bat
+    관련내용 :
+            connect-distributed.bat의 log4j 경로를 %BASE_DIR%/config/connect-log4j.properties에서
+                                                  %BASE_DIR%/etc/kafka/connect-log4j.properties로 바꾸어주면 해결 가능합니다.
+            (아래)
+            rem Log4j settings
+            IF ["%KAFKA_LOG4J_OPTS%"] EQU [""] (
+            	rem set KAFKA_LOG4J_OPTS=-Dlog4j.configuration=file:%BASE_DIR%/config/tools-log4j.properties
+            	set KAFKA_LOG4J_OPTS=-Dlog4j.configuration=file:%BASE_DIR%/etc/kafka/connect-log4j.properties
+            )
+

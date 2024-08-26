@@ -1,0 +1,24 @@
+● 프로젝트 생성
+	- devtool
+	- lombok
+	- eureka
+	- web
+● pom.xml
+	- modelmapper
+● application.xml
+	- ..
+● 패키지 생성
+	- controller
+	- dto
+	- vo
+	- jpa
+	- service
+● entity class 구현
+	- Order Entity 
+		직렬화 요청
+● Repository class 구현
+	- find 메소드 구현
+● Dto class 구현
+● Vo class 구현
+● Service 구현
+● Controller 구현

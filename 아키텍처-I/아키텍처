@@ -1,0 +1,9 @@
+rabbitmq 사용
+spring-cloud-config 사용
+spring-cloud-gateway 사용
+spring-cloud-security 사용 - 인증 권한
+spring-cloud-circuit breaker 사용
+spring-cloud-config bus 사용
+spring-cloud-message 사용 connector topic sinc 방식 사용
+swagger 적용 에러
+

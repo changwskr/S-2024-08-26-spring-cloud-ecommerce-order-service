@@ -1,0 +1,26 @@
+
+1.-----
+개인별 주문한 내역을 확인한다.
+(get)http://127.0.0.1:8000/order-service/58637473-1c45-463e-8378-f9eb09cb279c/orders
+
+2.----
+개인주문을 한다.
+(post) http://127.0.0.1:8000/order-service/58637473-1c45-463e-8378-f9eb09cb279c/orders
+{
+	"productId": "CATALOG-001",
+	"qty": 10,
+	"unitPrice": 2000
+}
+
+3.----
+오더 서비스 상태 조회
+http://localhost:56504/order-service/health_check
+
+4.----
+상품목록 조회
+http://localhost:53963/catalog-service/catalogs
+
+5. -----
+카탈로그 서비스 상태 조회
+http://localhost:53963/catalog-service/health_check
+

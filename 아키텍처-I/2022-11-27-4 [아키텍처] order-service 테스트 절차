@@ -1,0 +1,37 @@
+회원가입 http://127.0.0.1:58604/users
+환영 http://localhost:8000/user-service/welcome
+가입자 목록 http://127.0.0.1:8000/user-service/users
+헬스체킹 http://127.0.0.1:8000/user-service/health_check
+			http://127.0.0.1:8000/catalog-service/health_check
+상품목록 http://127.0.0.1:8000/catalog-service/catalogs
+상품주문 http://127.0.0.1:8000/order-service/230f7f26-18ca-404e-94a3-5083149a12e4/orders
+개별 주문목록 http://127.0.0.1:8000/order-service/230f7f26-18ca-404e-94a3-5083149a12e4/orders
+상품목록 http://localhost:8000/catalog-service/catalogs
+
+사용자 상품 주문 목록 http://127.0.0.1:8000/user-service/users/230f7f26-18ca-404e-94a3-5083149a12e4
+
+1.-----
+개인별 주문한 내역을 확인한다.
+(get)http://127.0.0.1:8000/order-service/58637473-1c45-463e-8378-f9eb09cb279c/orders
+                                         36d46749-c8cd-4b58-a88d-a0b508ebe351 이것은 userid 이다
+2.----
+개인주문을 한다.
+(post) http://127.0.0.1:8000/order-service/b020ca8d-e4d8-45c1-aee5-9baec37cff7e/orders
+{
+	"productId": "CATALOG-001",
+	"qty": 10,
+	"unitPrice": 2000
+}
+
+3.----
+오더 서비스 상태 조회
+http://localhost:56504/order-service/health_check
+
+4.----
+상품목록 조회
+http://localhost:53963/catalog-service/catalogs
+
+5. -----
+카탈로그 서비스 상태 조회
+http://localhost:53963/catalog-service/health_check
+

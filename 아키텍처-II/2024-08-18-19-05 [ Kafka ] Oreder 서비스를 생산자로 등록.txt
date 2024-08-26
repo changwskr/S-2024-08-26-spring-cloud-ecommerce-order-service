@@ -1,0 +1,267 @@
+[order-service]
+#-----------------------------------------------------------------------------------------------------------------------
+[시나리오]
+    □ 사용자 --------(사용자조회) ------ □ User-Service
+
+    □ 사용자 --------(상품조회)-------- □ Catalog-Service
+
+    □ 사용자 --------(상품주문)-------- □ Order-Service -------(상품수량업데이트)-------□ Catalog-Service
+                                        ★ OrderService에서 kafka Topic 메시지 전송 ----- 생성자 Producer ★
+                                        (생성자)
+    □ 사용자 --------(주문확인) ------- □ User-Service  -------(주문조회) -------------□ OrderService
+
+    □ Catalog-Service ★ (소비자)
+      CatalogService는 OrderService에서 생성된 Topic 메시지 취득 ---------------------- 소비자 Consumer ★
+
+#-----------------------------------------------------------------------------------------------------------------------
+[아키텍처]
+	□ kafka-sink-connector를 활용해 	주문이 발생한 내역을 다른 데이타베이스에 저장하는 역할 만들어보자
+	  주문 생산량 조정 topic은 그대로 활용한다.
+#-----------------------------------------------------------------------------------------------------------------------
+[order-service]
+    □ pom.xml
+            <dependency>
+                <groupId>org.springframework.kafka</groupId>
+                <artifactId>spring-kafka</artifactId>
+            </dependency>
+    □ 프로그램- KafkaProducerConfig 등록 (orderservice 생산자로서 역할을 한다)
+        - 생산 역할을 하도록 지정하고 ProducerFactory
+        - 토픽의 이벤트에 대한 리스너를 등록한다.
+        @EnableKafka
+        @Configuration
+        public class KafkaProducerConfig {
+            @Bean
+            public ProducerFactory<String, String> producerFactory() {
+                Map<String, Object> properties = new HashMap<>();
+                properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "127.0.0.1:9092");
+                properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+                properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+
+                return new DefaultKafkaProducerFactory<>(properties);
+            }
+
+            // 데이타는 카프카템플릿이라는 것을 이용한다.
+            @Bean
+            public KafkaTemplate<String, String> kafkaTemplate() {
+                return new KafkaTemplate<>(producerFactory());
+            }
+        }
+        □ 프로그램- KafkaProducer 등록
+        @Service 로 등록
+        public class KafkaProducer {
+            // 카프카로의 데이터 생산은 템플릿을 이용한다.
+            private KafkaTemplate<String, String> kafkaTemplate;
+
+            @Autowired
+            public KafkaProducer(KafkaTemplate<String, String> kafkaTemplate) {
+                this.kafkaTemplate = kafkaTemplate;
+            }
+
+            // 실제 메시지를 보내는 역할수행한다. topic=토픽이름
+            public OrderDto send(String topic, OrderDto orderDto) {
+                ObjectMapper mapper = new ObjectMapper();
+                String jsonInString = "";
+
+                try {
+                	// 오브젝트를 JSON으로 변환한다. orderdto - json 변환
+                    jsonInString = mapper.writeValueAsString(orderDto);
+                } catch(JsonProcessingException ex) {
+                    ex.printStackTrace();
+                }
+
+                // JSON 스트링으로 보낸다
+                kafkaTemplate.send(topic, jsonInString);
+                log.info("★★★ KafkaProducer.send ★★★ Kafka Producer sent data from the Order microservice: " + orderDto);
+
+                return orderDto;
+            }
+        }
+
+        □ 프로그램 - OrderController
+
+        @RestController
+        @RequestMapping("/order-service")
+        @Slf4j
+        public class OrderController {
+
+            ..................
+
+        	// (POST) http://127.0.0.1:8000/order-service/(user-id)/orders
+        	@PostMapping("/{userId}/orders")
+        	public ResponseEntity<ResponseOrder> createOrder(@PathVariable("userId") String userId,
+        			@RequestBody RequestOrder orderDetails) {
+
+        		log.info("★★★ Before retrieve orders microservice-createOrder");
+        		ModelMapper mapper = new ModelMapper();
+        		mapper.getConfiguration().setMatchingStrategy(MatchingStrategies.STRICT);
+
+        		OrderDto orderDto = mapper.map(orderDetails, OrderDto.class);
+        		orderDto.setUserId(userId);
+
+        		//--------------------------------------------------------------------------------------------------------------
+        		// 상품id, 수량, 단가, 토탈금액, 유저id, 생성일자일시
+        		// orders TABLE { 상품id, 수량, 단가, 토탈금액, 유저id, 생성일자일시 }
+        		// catalog TABLE { id, 상품id, 상품명, 수량, 단가 }
+        		// 주문한 order 정보의 상품에 해당하는 수량만큼 catalog 정보의 수량(stock)를 조정한다.
+        		//--------------------------------------------------------------------------------------------------------------
+        		OrderDto createdOrder = orderService.createOrder2(orderDto);
+
+        		ResponseOrder responseOrder = mapper.map(createdOrder, ResponseOrder.class);
+
+        		//--------------------------------------------------------------------------------------------------------------
+        		// 주문한 결과를 토픽을 이용해서 주문한 결과를 Producer한다.
+        		// 완료된 주문에 대한 Catalog-Service에 주문 수량을 조정하는 작업을 진행한다.
+        		//--------------------------------------------------------------------------------------------------------------
+
+        		boolean B_KFAKA_TOPIC_TYPE = false; // kafka - topic
+        		boolean B_KFAKA_SINC_TYPE = false; // kafka - topic + sinc event
+        		boolean B_KFAKA_REST_TEMPLATE_TYPE = true; // msa 동기화 방식 resttemplate, feign client
+
+        		if (B_KFAKA_TOPIC_TYPE) {
+        			//--------------------------------------------------------------------------------------------------------------
+        			// send this order to the kafka
+        			// example-order-topic으로 pub하면 catalog-service에서 sub하는 방식이다.
+        			// 여기서는 메시징을 통해서 이벤트를 전달하는 방식이다.
+        			// 즉 컨슈머측에서 로직을 구사하는 방식이다.
+        			//--------------------------------------------------------------------------------------------------------------
+        			kafkaProducer.send("example-order-topic", orderDto);
+        		}
+        		else if (B_KFAKA_REST_TEMPLATE_TYPE) {
+        			//--------------------------------------------------------------------------------------------------------------
+        			// 이것은 직접 orderservice가 성공하면 catalog 서비스를 호출하여 연동을 통한 상품수량을 조정하는 역할을 한다.
+        			// Using as rest template
+        			// RestTemplate.exchange(url, GET, 요청 데이타 타입, 수신 데이타 타입)
+        			// url: http://127.0.0.1:8000/catlog-service/catalogs (post)
+        			//--------------------------------------------------------------------------------------------------------------
+        		    RestTemplate restTemplate = new RestTemplate();
+        			List<ResponseCatalog> orders = new ArrayList<>();
+        			String catlogUrl = "http://127.0.0.1:8000/catlog-service/catalogs ";
+
+        			ResponseEntity<List<ResponseCatalog>> catalogListResponse =
+        										restTemplate.exchange(
+        												catlogUrl,
+        												HttpMethod.POST,
+        												null,
+        												new ParameterizedTypeReference<List<ResponseCatalog>>() {
+        										});
+
+        			List<ResponseCatalog> catalogList  = catalogListResponse.getBody();
+        			log.debug("--->catalogList>" + catalogList);
+        		}
+        		else if (B_KFAKA_SINC_TYPE) {
+        			//--------------------------------------------------------------------------------------------------------------
+        			// 2번 스타일 여기서 example-order-topic을 pub하면 sink-connector에서 sub하는 방식이다.
+        			// 데이타베이스의 내용을 전달하는 방식이다. 그럼 변경 내용을 여기서 변경하여 내용을 전달한다. 그래서 UUID 부분과 물량을 여기서 조정하여
+        			// 순수하게 데이타만으로 처리하는 방식을 말한다.
+        			//--------------------------------------------------------------------------------------------------------------
+
+        			// kafakaproducer의 목적은 단순이 상품목록에 대한 카운터 조정의 역할밖에 없다.
+        			// sink에 의해서 데이타는 조정될 것이다.
+        			kafkaProducer.send("example-catalog-topic", orderDto);
+
+        			// 이 로직이 필요한 이유는 sink connector를 통해서 타 db에 저장목적일때 데이타를 채워주는 역할이다.
+        			// UUID 는 변경할 수 없으므로 여기서 다시 바꾸는 역할을 한다.
+        			orderDto.setOrderId(UUID.randomUUID().toString());
+        			orderDto.setTotalPrice(orderDetails.getQty() * orderDetails.getUnitPrice());
+
+        			// 2022-11-22 컨테이너화 시키는데 sink 서비스는 일단 막는다.
+        			// 다음에는 푼다. 컨테이너에는 커넥터 서비스 제공환경 안만들었다.
+
+        			// sink connector를 통해서 가정은 현재 catalog-service의 데이타를 다른 데이타 베이스의 주문목록에 저장하는 것이
+        			// 목적이다.
+        			// 그래서 여기서는 uuid와 orderid, totalprice를 여기서 계산하는 것이다.
+        			orderProducer.send("my_sink_orders", orderDto);
+        		}
+        		else {
+        			log.debug("아무 타입도 적용하지 않았다.");
+        		}
+
+        		log.info("After added orders data");
+        		log.info("★★★ After retrieve orders microservice-createOrder");
+        		return ResponseEntity.status(HttpStatus.CREATED).body(responseOrder);
+
+        	}
+
+        	@GetMapping("/{userId}/orders")
+        	public ResponseEntity<List<ResponseOrder>> getOrder(@PathVariable("userId") String userId) throws Exception {
+        		log.info("★★★ Before retrieve orders microservice-getOrder");
+        		Iterable<OrderEntity> orderList = orderService.getOrdersByUserId2(userId);
+
+        		List<ResponseOrder> result = new ArrayList<>();
+        		orderList.forEach(v -> {
+        			result.add(new ModelMapper().map(v, ResponseOrder.class));
+        		});
+
+        		System.out.println("--->result>" + result);
+
+        		// 장애발생 테스트 목적으로 준비
+        		// 이것은 써킷브레이크가 제되로 작동되는지 확인하기 위해 만든 로직이다. 강제 타임아웃을 유도할 목적이다.
+        		boolean B_KFAKA_REST_TEMPLATE_TYPE = true; // msa 동기화 방식 resttemplate, feign client
+        		if (B_KFAKA_REST_TEMPLATE_TYPE) {
+        			try {
+        				Thread.sleep(30000);
+        				throw new Exception("장애 발생");
+        			} catch (InterruptedException ex) {
+        				log.warn(ex.getMessage());
+        			}
+        		}
+
+        		log.info("Add retrieved orders data");
+        		log.info("★★★ After retrieve orders microservice-getOrder");
+
+        		return ResponseEntity.status(HttpStatus.OK).body(result);
+        	}
+        }
+
+#-----------------------------------------------------------------------------------------------------------------------
+[테트트 절차]
+    □ kafka 준비사항
+    	- topic 준비
+    		. example-catalog-topic
+    		    .\bin\windows\kafka-topics.bat --create --topic example-catalog-topic --bootstrap-server localhost:9092 --partitions 1
+    		. my_sink_orders
+    		    .\bin\windows\kafka-topics.bat --create --topic my_sink_orders --bootstrap-server localhost:9092 --partitions 1
+
+    	- sink connector 준비
+    		kafka-sink-connector를 생성한다.
+    		sink 데이타베이스는 원천과 다른 mydb로한다.
+
+    		(post) http://localhost:8083/connectors
+    		{
+    			"name":"my-order-sink-connect",
+    			"config":{
+    				"connector.class":"io.confluent.connect.jdbc.JdbcSinkConnector",
+    				"connection.url":"jdbc:mysql://localhost:3306/mydb?serverTimezone=Asia/Seoul&serverTimezone=UTC",
+    				"connection.user":"kafka",
+    				"connection.password":"kafka1234",
+    				"auto.create":"true",
+    				"auto.evolve":"true",
+    				"delete.enabled":"false",
+    				"tasks.max":"1",
+    				"topics":"my_sink_orders"
+    			}
+    		}
+
+    □ postman에서 한건의 데이타를 order-service로 주문해본다.
+        ● 개인주문을 한다.
+          (post) http://127.0.0.1:8000/order-service/58637473-1c45-463e-8378-f9eb09cb279c/orders
+          {
+              "productId": "CATALOG-001",
+              "qty": 10,
+              "unitPrice": 2000
+          }
+
+        ● controller - createOrder
+
+        ● service - orderService.createOrder2(orderDto);
+
+        ● event sourcing
+          (controller)
+          - 카프카 Pub :
+              kafkaProducer.send("example-order-topic", orderDto);
+                  - catalog-service가 Sub 대기
+
+         - 카프카 sink_connector : 다른 데이타베이스에 저장
+             kafkaProducer.send("example-catalog-topic", orderDto);
+             orderProducer.send("my_sink_orders", orderDto);
+
